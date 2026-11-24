@@ -1,0 +1,6 @@
+SDK: /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk
+Xcode 27.2
+Build version 27B52
+ProductName:		macOS
+ProductVersion:		27.0.1
+BuildVersion:		26A434
