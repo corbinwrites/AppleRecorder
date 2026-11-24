@@ -12,6 +12,8 @@ Rule: where web and spike disagree, the spike wins. Where a spike claims more th
 
 **Revision 4:** name fixed (Apple Recorder). Part 2 added (§21–§33): builder rules, repo scaffold, reference code, tests, work order, GitHub steps. Temp tracks are now 16-bit PCM CAF (§5.3).
 
+**Revision 5:** agent kit. Spec tests are frozen by git tag `spec-v1` (§21 rules 17–19, `scripts/protect-tests.sh`). Per-step task files in `docs/tasks/` are generated from this guide (`make tasks`). New step P0.3 (stubs + spec tests, compiled on a Mac). Apple API lookup helpers (`scripts/apple-api.sh`). Fixed: the `writeSilence` placeholder (§25.8), the missing `ProcessingStage` enum (§24.7), the P0.1 exit check (tests stay red until P0.3 and P1+).
+
 ---
 
 ## 1. Decisions locked
@@ -48,7 +50,7 @@ Read this before writing code. Several "passes" are weaker than they look.
 | L3 benchmark | tiny/base/small only, warm runs, no WER, no peak RAM (RSS deltas are noise). | Speed is real. Quality and memory are unmeasured. |
 | L4 Foundation Models | `contextSize` = 4096 confirmed on this machine. 24.7 s for ~2.2k chars synthetic. | **Passed.** Real transcripts untested. |
 | FM availability | `deviceNotEligible` inside a sandboxed shell, `available` unsandboxed. | **Gate for the sandbox decision (§13).** |
-| `com.apple.audio.capture` entitlement | Spike table says "likely required". Web (catap docs) says only `NSAudioCaptureUsageDescription` is needed. | Unknown. Test in a signed `.app` (P1). |
+| `com.apple.audio.capture` entitlement | Spike table says "likely required". Web (catap docs) says only `NSAudioCaptureUsageDescription` is needed. | Unknown. Test in a signed `.app` (G1). |
 
 ### First thing to do: fix L1
 
@@ -669,21 +671,21 @@ L4 saw FM report `deviceNotEligible` when sandboxed. **Test Foundation Models in
 
 ## 16. Build phases and gates
 
-| Phase | Deliverable | Gate to continue |
+| Gate | Deliverable | Pass condition |
 |---|---|---|
-| P0 Foundations | Repo, Xcode project, local packages, CI on `macos-26`, LICENSE, signing setup scripts (§20), README skeleton | CI green on empty app |
-| P1 Capture | `.app` with a **stable signing identity** that records all three modes to temp `.caf`, builds the stereo/mono `.m4a`, zero-buffer detector, source picker | **Audible capture proven, L1 + L2 pass.** Channel check: mic only on ch 0, app only on ch 1. If not, stop and report. |
-| P2 Transcribe | Model manager, channel-split WhisperKit, merge, progress | WER + peak RAM measured on Fixtures C and D |
-| P3 Enhance | Chunker, token budget, digests, final notes, error paths | Real-transcript quality accepted |
-| P4 Native shell + themes | `NavigationSplitView`, toolbar, glass capsule, inspector, Settings scene, theme package (9 themes) | Every theme reviewed in light and dark macOS, plus Reduce Transparency and Increase Contrast |
-| P5 Editor | TextKit 2 markdown editor, shortcuts, autosave | Typing latency + IME check |
-| P6 Output + flows | Folders, markdown writer, consent flow, import, search | §15.3 items 1–8 pass |
-| P7 Hardening | Permissions walkthrough, permission-loss detection, crash recovery, accessibility, **install test on a second Mac** | §15.3 all pass |
-| P8 Release | Zip/DMG, Homebrew tap, source-build script, README, v1.0.0 | Fresh-account install via each install path |
+| G0 Foundations | Repo, Xcode project, local packages, CI on `macos-26`, LICENSE, signing setup scripts (§20), README skeleton | CI green on empty app |
+| G1 Capture | `.app` with a **stable signing identity** that records all three modes to temp `.caf`, builds the stereo/mono `.m4a`, zero-buffer detector, source picker | **Audible capture proven, L1 + L2 pass.** Channel check: mic only on ch 0, app only on ch 1. If not, stop and report. |
+| G2 Transcribe | Model manager, channel-split WhisperKit, merge, progress | WER + peak RAM measured on Fixtures C and D |
+| G3 Enhance | Chunker, token budget, digests, final notes, error paths | Real-transcript quality accepted |
+| G4 Native shell + themes | `NavigationSplitView`, toolbar, glass capsule, inspector, Settings scene, theme package (9 themes) | Every theme reviewed in light and dark macOS, plus Reduce Transparency and Increase Contrast |
+| G5 Editor | TextKit 2 markdown editor, shortcuts, autosave | Typing latency + IME check |
+| G6 Output + flows | Folders, markdown writer, consent flow, import, search | §15.3 items 1–8 pass |
+| G7 Hardening | Permissions walkthrough, permission-loss detection, crash recovery, accessibility, **install test on a second Mac** | §15.3 all pass |
+| G8 Release | Zip/DMG, Homebrew tap, source-build script, README, v1.0.0 | Fresh-account install via each install path |
 
-P4 can run in parallel with P2/P3 after P0. v1.1 queue: diarization, Terminal preset, editor polish, Parakeet.
+G4 can run in parallel with G2/G3 after G0. These G-labels are product gates; the builder's step IDs (P0.0 … P10) are in §32. v1.1 queue: diarization, Terminal preset, editor polish, Parakeet.
 
-**Implementation order:** Part 2 §32 supersedes this phase order for the builder (software-testable work first, hardware gates flagged `NEEDS HUMAN`). The gates themselves are unchanged.
+**Implementation order:** Part 2 §32 supersedes this gate order for the builder (software-testable work first, hardware gates flagged `NEEDS HUMAN`). The gates themselves are unchanged.
 
 ---
 
@@ -740,7 +742,7 @@ Apple DTS's answer (forums thread 795739): sign with a stable identity, ideally 
 
 **Layer 5. Trust**
 - SHA-256 in release notes, reproducible build instructions.
-- GitHub artifact attestations (build provenance) are free for public repos. Verify the current action name before wiring.
+- Build provenance is attested in `release.yml` with `actions/attest-build-provenance@v3` (free for public repos). Users verify a download with `gh attestation verify <file> -R corbinwrites/AppleRecorder`.
 - Open source is the trust model. A self-signed cert proves "same publisher as last release", not "Apple checked it".
 
 ### 17.4 Options compared
@@ -779,7 +781,7 @@ No Sparkle in v1. Updates are `brew upgrade` or re-download. Sparkle with EdDSA 
 | 8 GB memory pressure | Medium | One model at a time, `small` default, Instruments gate |
 | FM guardrail false positives on sermons/names | Medium | Per-chunk fallback, never drop transcript |
 | Whisper hallucination on silence | Medium | VAD + post-filters |
-| TextKit 2 editor edge cases (IME, undo) | Medium | Line-based restyle, test early (P5) |
+| TextKit 2 editor edge cases (IME, undo) | Medium | Line-based restyle, test early (G5) |
 | Output-device switch kills tap | Medium | Rebuild listener, gap markers |
 | macOS 27 SDK drift vs CI Xcode 26.6 | Low | Min OS 26, no 27-only APIs |
 | Font license surprise | Low | Verify OFL, ship license files |
@@ -916,6 +918,158 @@ end
 4. Negative test: install an ad-hoc build over it. Confirm the app detects silence and explains the permission loss.
 5. Record the macOS version and result. Fail on step 3 = trigger 1 in §17.5.
 
+### 20.5 Local dev signing and `make install`
+
+`scripts/setup-local-signing.sh` (run once per Mac via `make setup-signing`; this is the dev identity, **not** the release cert):
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+NAME="AppleRecorder Local Dev"
+if security find-certificate -c "$NAME" >/dev/null 2>&1; then echo "'$NAME' already exists"; exit 0; fi
+TMP="$(mktemp -d)"; cd "$TMP"
+cat > c.cnf <<EOF
+[req]
+distinguished_name = dn
+x509_extensions = ext
+prompt = no
+[dn]
+CN = $NAME
+[ext]
+basicConstraints = critical,CA:false
+keyUsage = critical,digitalSignature
+extendedKeyUsage = critical,codeSigning
+EOF
+openssl req -x509 -newkey rsa:2048 -nodes -keyout k.pem -out c.pem -days 3650 -config c.cnf
+openssl pkcs12 -export -inkey k.pem -in c.pem -out d.p12 -name "$NAME" -passout pass:ar \
+  -certpbe PBE-SHA1-3DES -keypbe PBE-SHA1-3DES -macalg sha1
+security import d.p12 -k "$HOME/Library/Keychains/login.keychain-db" -P ar -T /usr/bin/codesign
+rm -rf "$TMP"
+echo "Created '$NAME'. If codesign asks for keychain access, choose Always Allow."
+```
+
+`scripts/sign-local.sh <app>` (used by `make install`; falls back to ad-hoc with a loud warning):
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+APP="${1:?usage: sign-local.sh path/to/AppleRecorder.app}"
+NAME="AppleRecorder Local Dev"
+# Sign by SHA-1: an untrusted self-signed cert is hidden by `find-identity -v`.
+ID="$(security find-identity -p codesigning | awk -v n="$NAME" 'index($0, n) { print $2; exit }')"
+if [ -z "$ID" ]; then
+  echo "WARNING: no '$NAME' identity. Signing ad-hoc: permissions reset on every rebuild. Run: make setup-signing" >&2
+  ID="-"
+fi
+find "$APP/Contents" \( -name "*.dylib" -o -name "*.framework" -o -name "*.xpc" \) -print0 \
+  | xargs -0 -n1 codesign --force --options runtime --timestamp=none --sign "$ID"
+codesign --force --options runtime --timestamp=none --sign "$ID" --entitlements App/AppleRecorder.entitlements "$APP"
+codesign --verify --deep --strict "$APP" && echo "signed with: $ID"
+```
+
+Makefile targets (added in §22.4): `make setup-signing` runs the first script; `make install` builds Release with `CODE_SIGNING_ALLOWED=NO`, runs `sign-local.sh`, and copies the app to `/Applications`.
+
+### 20.6 `scripts/verify-signing.sh` (run in CI and by hand)
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+APP="${1:?usage: verify-signing.sh path/to/AppleRecorder.app}"
+PIN="$(cat release-cert.sha1)"
+fail() { echo "FAIL: $1"; exit 1; }
+codesign --verify --deep --strict "$APP" || fail "signature invalid"
+REQ="$(codesign -d -r- "$APP" 2>&1)"; echo "$REQ"
+echo "$REQ" | grep -q 'cdhash' && fail "designated requirement is cdhash-based"
+echo "$REQ" | grep -Eq 'certificate (leaf|root) = H"' || fail "no certificate hash in requirement"
+TMP="$(mktemp -d)"; (cd "$TMP" && codesign -d --extract-certificates "$APP" >/dev/null 2>&1)
+GOT="$(openssl x509 -inform DER -in "$TMP/codesign0" -noout -fingerprint -sha1 | sed 's/.*=//; s/://g')"
+[ "$GOT" = "$PIN" ] || fail "signed with a different certificate ($GOT)"
+codesign -dv "$APP" 2>&1 | grep -q 'flags=.*runtime' || fail "hardened runtime is off"
+codesign -d --entitlements - "$APP" 2>&1 | grep -q 'com.apple.security.device.audio-input' || fail "audio-input entitlement missing"
+for k in NSMicrophoneUsageDescription NSAudioCaptureUsageDescription; do
+  /usr/libexec/PlistBuddy -c "Print :$k" "$APP/Contents/Info.plist" >/dev/null 2>&1 || fail "$k missing from Info.plist"
+done
+echo "PASS verify-signing"
+```
+
+### 20.7 `.github/workflows/release.yml`
+
+```yaml
+name: release
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+jobs:
+  release:
+    runs-on: macos-26
+    environment: release
+    env:
+      APP: build/Build/Products/Release/AppleRecorder.app
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen
+      - run: make test
+      - name: Build (unsigned)
+        run: |
+          xcodegen generate
+          xcodebuild -project AppleRecorder.xcodeproj -scheme AppleRecorder -configuration Release \
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO build
+      - name: Sign with the pinned release certificate
+        env:
+          MAC_SIGN_P12: ${{ secrets.MAC_SIGN_P12 }}
+          MAC_SIGN_PASSWORD: ${{ secrets.MAC_SIGN_PASSWORD }}
+          KC_PASS: ${{ secrets.KC_PASS }}
+        run: ./scripts/sign-release.sh "$APP"
+      - run: ./scripts/verify-signing.sh "$APP"
+      - name: Package
+        run: |
+          VER="${GITHUB_REF_NAME#v}"
+          mkdir -p dist
+          ditto -c -k --keepParent "$APP" "dist/AppleRecorder-$VER.zip"
+          hdiutil create -volname "Apple Recorder" -srcfolder "$APP" -ov -format UDZO "dist/AppleRecorder-$VER.dmg"
+          (cd dist && shasum -a 256 AppleRecorder-* > SHA256SUMS.txt)
+      - uses: actions/attest-build-provenance@v3     # v4 is a wrapper over actions/attest; v3 is what GitHub's docs show
+        with:
+          subject-path: "dist/*"
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --title "Apple Recorder $GITHUB_REF_NAME" --generate-notes
+```
+
+The entitlements are applied inside `sign-release.sh` (§20.2), which is why the build step disables Xcode's own signing. Pull-request and fork builds never run this workflow.
+
+### 20.8 `scripts/print-cask.sh` (prints the Homebrew cask for the tap repo)
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+V="${1:?version, e.g. 1.0.0}"; ZIP="${2:?path to AppleRecorder-$V.zip}"
+SHA="$(shasum -a 256 "$ZIP" | awk '{print $1}')"
+cat <<EOF
+cask "apple-recorder" do
+  version "$V"
+  sha256 "$SHA"
+  url "https://github.com/corbinwrites/AppleRecorder/releases/download/v#{version}/AppleRecorder-#{version}.zip"
+  name "Apple Recorder"
+  desc "Local meeting recorder and note taker"
+  homepage "https://github.com/corbinwrites/AppleRecorder"
+  depends_on macos: ">= :tahoe"
+  app "AppleRecorder.app"
+  postflight do
+    system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{appdir}/AppleRecorder.app"]
+  end
+  caveats "This app is self-signed, not notarized. The cask removes the quarantine flag on install."
+end
+EOF
+```
+
+A human pastes the output into `Casks/apple-recorder.rb` in `corbinwrites/homebrew-tap` after each release.
+
 ---
 
 # PART 2: Implementation spec (for the builder)
@@ -942,6 +1096,10 @@ Reference code below is a **starting point**. **The tests are the contract.** If
 13. Ask no questions. Decide from this document. Undecidable → `BLOCKERS.md`.
 14. Identifiers: app display name **Apple Recorder**, product/bundle name `AppleRecorder.app`, repo `AppleRecorder`, bundle ID `io.github.corbinwrites.AppleRecorder`. Never change the bundle ID after the first release (it resets every user's permissions).
 15. Git: remote `origin` is `git@github.com:corbinwrites/AppleRecorder.git` (HTTPS: `https://github.com/corbinwrites/AppleRecorder.git`), branch `main`. Never force-push, never rewrite pushed history, never commit secrets (`*.p12`, `release-key.pem`, tokens, `.env`), never put credentials in a remote URL or a file. Push at the end of every phase (§22.6). If a push fails on authentication, keep working locally and record `NEEDS HUMAN: unpushed commits` in `PROGRESS.md`.
+16. Never edit `docs/BUILD-GUIDE.md` or `docs/research/*`. They are the spec. A proposed change goes in `BLOCKERS.md` for a human to decide.
+17. **Spec tests are frozen.** Every file under `Packages/*/Tests` and `App/UITests` that exists at git tag `spec-v1` may not be modified, renamed, or deleted. `scripts/protect-tests.sh` enforces it (verify, pre-commit, CI). You may add new test files. A test that looks wrong goes in `BLOCKERS.md`; only a human moves the tag.
+18. **Never guess an Apple or WhisperKit API.** Run `scripts/apple-api.sh <Symbol>` (greps the SDK interfaces, headers, and SwiftPM checkouts) and read `docs/reference/sdk/`. Record the confirmed signature in `docs/API-NOTES.md`. Not found: `BLOCKERS.md`, stop.
+19. **One step per session.** Read `AGENTS.md` and `docs/tasks/<step>.md` only. Task files are generated (`make tasks`); do not edit them. Run `swift test --filter <Suite>` for fast loops. The same failure after 3 attempts: `BLOCKERS.md`, stop.
 
 ---
 
@@ -952,7 +1110,8 @@ Reference code below is a **starting point**. **The tests are the contract.** If
 ```
 AppleRecorder/
 ├─ project.yml                      XcodeGen spec (source of truth for the Xcode project)
-├─ Makefile  .gitignore  AGENTS.md
+├─ Makefile  .gitignore  AGENTS.md  CLAUDE.md  HUMAN-TODO.md
+├─ mk/agent.mk                      targets: hooks, tasks, step, protect
 ├─ PROGRESS.md  BLOCKERS.md  README.md  LICENSE  CONSENT.md  THIRD-PARTY-LICENSES.md
 ├─ .github/workflows/  ci.yml  release.yml
 ├─ App/
@@ -973,7 +1132,10 @@ AppleRecorder/
 ├─ Spikes/ApiCheck/                 Step 0 compile-check package (§23)
 ├─ Spikes/legacy-scripts/           L1/L3 scripts from the local spikes (copied in by a human, §22.6)
 ├─ scripts/  verify.sh  check-realtime.sh  make-release-cert.sh  sign-release.sh  verify-signing.sh
+│            setup-local-signing.sh  sign-local.sh  print-cask.sh
+│            protect-tests.sh  run-step.sh  split-guide.py  apple-api.sh  dump-sdk-interfaces.sh  hooks/pre-commit
 └─ docs/  BUILD-GUIDE.md  API-NOTES.md  research/{web-research-findings.md, LOCAL-SPIKES-findings2.md}
+         tasks/ (generated, plus tasks/src/ hand-written bodies)  reference/ (SDK dumps, validate_logic.py)
 ```
 
 Dependency rules (enforced by `Package.swift`, no exceptions): `Core` depends on nothing. `Capture`, `Transcribe`, `Enhance`, `Output`, `Theme` depend only on `Core`. `Transcribe` also depends on WhisperKit. `EditorKit` depends on `Core` and `Theme`. `Pipeline` depends on `Core`, `Enhance`, `Output`. The app depends on all.
@@ -1071,7 +1233,8 @@ Non-sandboxed (no `app-sandbox` key). See §13.3.
 
 ```make
 PKGS = Core Capture Transcribe Enhance Output Theme EditorKit Pipeline
-.PHONY: gen build test verify selftest
+-include mk/agent.mk
+.PHONY: gen build test verify selftest setup-signing install
 gen:
 	xcodegen generate
 build: gen
@@ -1082,6 +1245,13 @@ verify:
 	./scripts/verify.sh
 selftest: build
 	./scripts/verify.sh --selftests
+setup-signing:
+	./scripts/setup-local-signing.sh
+install: gen
+	xcodebuild -project AppleRecorder.xcodeproj -scheme AppleRecorder -configuration Release -derivedDataPath build CODE_SIGNING_ALLOWED=NO build
+	./scripts/sign-local.sh build/Build/Products/Release/AppleRecorder.app
+	rm -rf /Applications/AppleRecorder.app
+	cp -R build/Build/Products/Release/AppleRecorder.app /Applications/
 ```
 
 ### 22.5 `PROGRESS.md` format
@@ -1308,7 +1478,15 @@ public struct AppSettings: Codable, Sendable, Equatable {
 }
 ```
 
-Persist as JSON at `~/Library/Application Support/AppleRecorder/settings.json` through `SettingsStore` (load returns defaults if the file is missing or corrupt; never crashes).
+Persist as JSON through `SettingsStore` (file: `~/Library/Application Support/AppleRecorder/settings.json`):
+
+```swift
+public actor SettingsStore {
+    public init(fileURL: URL)
+    public func load() -> AppSettings          // defaults when the file is missing or corrupt; never throws or crashes
+    public func save(_ s: AppSettings) throws  // atomic write, pretty-printed, sorted keys
+}
+```
 
 ### 24.4 Session store (`SessionStore.swift`)
 
@@ -1326,7 +1504,10 @@ public protocol SessionStore: Sendable {
     func recoverInterrupted() async throws -> [Session]   // see test
     func sessionDirectory(for id: UUID) -> URL
 }
-public actor FileSessionStore: SessionStore { public init(root: URL) }
+public actor FileSessionStore: SessionStore {
+    public init(root: URL)
+    public nonisolated func sessionDirectory(for id: UUID) -> URL      // must be nonisolated to satisfy the protocol
+}
 ```
 
 Rules: JSON uses `.iso8601` dates, `.prettyPrinted` + `.sortedKeys`; every write is atomic (`Data.write(to:options: .atomic)`). `recoverInterrupted()`: for each session whose state is `.recording` or `.armed`: if `recording/` contains any temp track file with size > 0 → state `.stopped`, `recoveredFromCrash = true`; otherwise → state `.failed` with `FailureInfo(stage: "recording", message: "No audio was saved")`. Sessions in `.processing` become `.failed` with stage `"processing"` and message `"Interrupted"`. Never touch `.done`.
@@ -1334,25 +1515,57 @@ Rules: JSON uses `.iso8601` dates, `.prettyPrinted` + `.sortedKeys`; every write
 ### 24.5 Test support (`CoreTestSupport`)
 
 ```swift
-public struct CharTokenCounter: TokenCounter {            // deterministic: 1 token per `perToken` chars (ceil)
+import Foundation
+import Core
+
+public struct CharTokenCounter: TokenCounter {             // deterministic: ceil(chars / perToken)
     public let perToken: Int
     public init(perToken: Int = 4) { self.perToken = perToken }
     public func tokens(in text: String) async throws -> Int { (text.count + perToken - 1) / perToken }
 }
+
 public final class FakeNotesGenerator: NotesGenerator, @unchecked Sendable {
-    // Records every call; behavior is scripted by closures. Used by Enhance tests.
+    private let lock = NSLock()
+    private var _digests: [String] = [], _merges: [[ChunkDigest]] = [], _finals: [(notes: String, merged: ChunkDigest)] = []
     public var onDigest: @Sendable (String) throws -> ChunkDigest = { _ in .empty }
     public var onMerge: @Sendable ([ChunkDigest]) throws -> ChunkDigest = { _ in .empty }
     public var onFinalize: @Sendable (String, ChunkDigest) throws -> MeetingNotesResult = { _, _ in
         MeetingNotesResult(summary: "S", decisions: [], actionItems: [], openQuestions: [], expandedNotes: "") }
-    public private(set) var digestInputs: [String] = []   // append inside digest(); protect with a lock in the real code
-    // ... conforming methods call the closures and record inputs
+    public init() {}
+    public var digestInputs: [String] { lock.withLock { _digests } }
+    public var mergeInputs: [[ChunkDigest]] { lock.withLock { _merges } }
+    public var finalizeInputs: [(notes: String, merged: ChunkDigest)] { lock.withLock { _finals } }
+    public func digest(transcriptChunk: String) async throws -> ChunkDigest {
+        lock.withLock { _digests.append(transcriptChunk) }          // record first, then run the closure outside the lock
+        return try onDigest(transcriptChunk)
+    }
+    public func merge(digests: [ChunkDigest]) async throws -> ChunkDigest {
+        lock.withLock { _merges.append(digests) }
+        return try onMerge(digests)
+    }
+    public func finalize(userNotes: String, merged: ChunkDigest) async throws -> MeetingNotesResult {
+        lock.withLock { _finals.append((userNotes, merged)) }
+        return try onFinalize(userNotes, merged)
+    }
 }
-public struct FakeTranscriptionEngine: TranscriptionEngine { public var result: [RawSegment]; public var error: (any Error)? }
-public func temporaryDirectory() throws -> URL   // unique dir under NSTemporaryDirectory(); caller removes it
+
+public struct FakeTranscriptionEngine: TranscriptionEngine {
+    public var result: [RawSegment]; public var error: (any Error)?
+    public init(result: [RawSegment] = [], error: (any Error)? = nil) { self.result = result; self.error = error }
+    public func transcribe(audioFile: URL, vocabulary: [String], onProgress: @escaping @Sendable (Double) -> Void) async throws -> [RawSegment] {
+        onProgress(0.5); if let error { throw error }; onProgress(1); return result
+    }
+}
+
+public func temporaryDirectory() throws -> URL {
+    let url = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true).appendingPathComponent("ar-test-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+    return url
+}
+public func / (lhs: URL, rhs: String) -> URL { lhs.appendingPathComponent(rhs) }       // used by tests: dir/"mic.caf"
 ```
 
-### 24.6 Core tests (`Tests/CoreTests`, Swift Testing)
+### 24.6 Core tests (`Tests/CoreTests`, Swift Testing; write all of them)
 
 ```swift
 import Testing
@@ -1361,16 +1574,14 @@ import Foundation
 import CoreTestSupport
 
 @Suite struct StateMachineTests {
-    // The allowed set, spelled out independently of the implementation.
-    static let expected: Set<String> = [
+    static let expected: Set<String> = [                       // spelled out independently of the implementation
         "idle>armed", "idle>stopped", "armed>recording", "armed>idle", "recording>stopped",
         "recording>failed", "stopped>processing", "stopped>idle", "processing>done",
         "processing>failed", "failed>processing", "failed>idle", "done>processing", "done>idle",
     ]
     @Test func fullMatrix() {
         for a in SessionState.allCases { for b in SessionState.allCases {
-            #expect(a.canTransition(to: b) == Self.expected.contains("\(a.rawValue)>\(b.rawValue)"),
-                    "\(a) -> \(b)")
+            #expect(a.canTransition(to: b) == Self.expected.contains("\(a.rawValue)>\(b.rawValue)"), "\(a) -> \(b)")
         } }
     }
     @Test func nothingTransitionsToItself() { for s in SessionState.allCases { #expect(!s.canTransition(to: s)) } }
@@ -1384,29 +1595,87 @@ import CoreTestSupport
         #expect(CaptureMode.micOnly.hasMic && !CaptureMode.micOnly.hasApp)
         #expect(CaptureMode.appOnly.hasApp && !CaptureMode.appOnly.hasMic)
         #expect(CaptureMode.appAndMic.frontmatterValue == "app+mic")
+        #expect(CaptureMode.micOnly.frontmatterValue == "mic" && CaptureMode.appOnly.frontmatterValue == "app")
     }
 }
 
 @Suite struct SessionStoreTests {
+    private func writeTrack(_ store: FileSessionStore, _ id: UUID, bytes: Int) throws {
+        let rec = store.sessionDirectory(for: id).appendingPathComponent("recording", isDirectory: true)
+        try FileManager.default.createDirectory(at: rec, withIntermediateDirectories: true)
+        try Data(repeating: 1, count: bytes).write(to: rec / "mic.caf")
+    }
     @Test func roundTrip() async throws {
         let dir = try temporaryDirectory(); defer { try? FileManager.default.removeItem(at: dir) }
         let store = FileSessionStore(root: dir)
         var s = try await store.create(title: "Weekly sync", mode: .appAndMic)
-        s.sourceAppName = "Discord"; s.state = .stopped
+        s.sourceAppName = "Discord"; s.state = .stopped; s.durationSeconds = 12.5
         try await store.save(s)
         #expect(try await store.load(id: s.id) == s)
     }
-    @Test func listNewestFirst() async throws { /* create 3 sessions with createdAt t0<t1<t2; expect order t2,t1,t0 */ }
-    @Test func notesRoundTripUnicode() async throws { /* "héllo ✓ 日本語\n- [ ] x" survives saveNotes/loadNotes byte-for-byte */ }
-    @Test func recoverRecordingWithAudio() async throws {
-        // create, set state .recording, write 10 bytes to recording/mic.caf, recoverInterrupted()
-        // expect state .stopped, recoveredFromCrash == true
+    @Test func listNewestFirst() async throws {
+        let dir = try temporaryDirectory(); defer { try? FileManager.default.removeItem(at: dir) }
+        let store = FileSessionStore(root: dir)
+        var ids: [UUID] = []
+        for i in 0..<3 {
+            var s = try await store.create(title: "S\(i)", mode: .micOnly)
+            s.createdAt = Date(timeIntervalSince1970: 1_000 + Double(i) * 100)
+            try await store.save(s); ids.append(s.id)
+        }
+        #expect(try await store.list().map(\.id) == ids.reversed())
     }
-    @Test func recoverRecordingWithoutAudio() async throws { /* no files -> .failed, failure.stage == "recording" */ }
-    @Test func recoverProcessing() async throws { /* .processing -> .failed, message "Interrupted" */ }
-    @Test func doneIsUntouched() async throws { /* .done stays .done and equal after recovery */ }
+    @Test func notesRoundTripUnicode() async throws {
+        let dir = try temporaryDirectory(); defer { try? FileManager.default.removeItem(at: dir) }
+        let store = FileSessionStore(root: dir)
+        let s = try await store.create(title: "N", mode: .micOnly)
+        let text = "héllo ✓ 日本語\n- [ ] x\n"
+        try await store.saveNotes(text, for: s.id)
+        #expect(try await store.loadNotes(for: s.id) == text)
+    }
+    @Test func recoverRecordingWithAudio() async throws {
+        let dir = try temporaryDirectory(); defer { try? FileManager.default.removeItem(at: dir) }
+        let store = FileSessionStore(root: dir)
+        var s = try await store.create(title: "R", mode: .appAndMic); s.state = .recording; try await store.save(s)
+        try writeTrack(store, s.id, bytes: 10)
+        let recovered = try await store.recoverInterrupted()
+        #expect(recovered.count == 1 && recovered[0].state == .stopped && recovered[0].recoveredFromCrash)
+        #expect(try await store.load(id: s.id).state == .stopped)
+    }
+    @Test func recoverRecordingWithoutAudio() async throws {
+        let dir = try temporaryDirectory(); defer { try? FileManager.default.removeItem(at: dir) }
+        let store = FileSessionStore(root: dir)
+        var s = try await store.create(title: "R", mode: .micOnly); s.state = .recording; try await store.save(s)
+        let r = try await store.recoverInterrupted()
+        #expect(r[0].state == .failed && r[0].failure?.stage == "recording" && r[0].failure?.message == "No audio was saved")
+    }
+    @Test func zeroByteTrackCountsAsNoAudio() async throws {
+        let dir = try temporaryDirectory(); defer { try? FileManager.default.removeItem(at: dir) }
+        let store = FileSessionStore(root: dir)
+        var s = try await store.create(title: "R", mode: .micOnly); s.state = .armed; try await store.save(s)
+        try writeTrack(store, s.id, bytes: 0)
+        #expect(try await store.recoverInterrupted()[0].state == .failed)
+    }
+    @Test func recoverProcessing() async throws {
+        let dir = try temporaryDirectory(); defer { try? FileManager.default.removeItem(at: dir) }
+        let store = FileSessionStore(root: dir)
+        var s = try await store.create(title: "P", mode: .micOnly); s.state = .processing; try await store.save(s)
+        let r = try await store.recoverInterrupted()
+        #expect(r[0].state == .failed && r[0].failure?.stage == "processing" && r[0].failure?.message == "Interrupted")
+    }
+    @Test func doneIsUntouched() async throws {
+        let dir = try temporaryDirectory(); defer { try? FileManager.default.removeItem(at: dir) }
+        let store = FileSessionStore(root: dir)
+        var s = try await store.create(title: "D", mode: .micOnly); s.state = .done; try await store.save(s)
+        #expect(try await store.recoverInterrupted().isEmpty)
+        #expect(try await store.load(id: s.id) == s)
+    }
     @Test func corruptSessionJSONDoesNotCrashList() async throws {
-        // write "{not json" into one session.json; list() returns the other sessions and does not throw
+        let dir = try temporaryDirectory(); defer { try? FileManager.default.removeItem(at: dir) }
+        let store = FileSessionStore(root: dir)
+        let good = try await store.create(title: "Good", mode: .micOnly)
+        let bad = try await store.create(title: "Bad", mode: .micOnly)
+        try Data("{not json".utf8).write(to: store.sessionDirectory(for: bad.id) / "session.json")
+        #expect(try await store.list().map(\.id) == [good.id])
     }
 }
 
@@ -1415,15 +1684,108 @@ import CoreTestSupport
         let s = AppSettings()
         #expect(s.transcriptionModel == "small" && s.notesModel == "apple-foundation-models")
         #expect(s.frontmatter && s.audioLinkStyle == .markdownLink && !s.exportCenteredMix && !s.consentAcknowledged)
+        #expect(s.themeID == "system" && s.chrome == .native && s.defaultMode == .appAndMic)
     }
-    @Test func missingOrCorruptFileYieldsDefaults() async throws { /* SettingsStore.load on missing and on "garbage" */ }
-    @Test func roundTrip() async throws { /* change every field, save, load, expect equal */ }
+    @Test func missingOrCorruptFileYieldsDefaults() async throws {
+        let dir = try temporaryDirectory(); defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir / "settings.json"
+        #expect(await SettingsStore(fileURL: url).load() == AppSettings())
+        try Data("garbage".utf8).write(to: url)
+        #expect(await SettingsStore(fileURL: url).load() == AppSettings())
+    }
+    @Test func roundTrip() async throws {
+        let dir = try temporaryDirectory(); defer { try? FileManager.default.removeItem(at: dir) }
+        let store = SettingsStore(fileURL: dir / "settings.json")
+        var s = AppSettings()
+        s.notesFolderPath = "/tmp/n"; s.audioFolderPath = "/tmp/a"; s.transcriptionModel = "large-v3-v20240930_626MB"
+        s.frontmatter = false; s.audioLinkStyle = .wikiEmbed; s.exportCenteredMix = true; s.themeID = "dracula"
+        s.matchWindowToTheme = false; s.editorFontName = "Geist Mono"; s.editorFontSize = 18
+        s.vocabulary = ["Soteriology", "Talbot"]; s.consentAcknowledged = true; s.defaultMode = .micOnly
+        try await store.save(s)
+        #expect(await store.load() == s)
+    }
 }
 ```
 
-Fill in the elided bodies (`/* ... */`) fully; the comment states exactly what to assert.
+### 24.7 Small pure helpers (Core): `SessionGrouping`, `Timecode`, `MeterGlyph`, `ProgressBar`
 
-Exit check P1: `cd Packages/Core && swift test` all green, ≥ 20 test cases.
+```swift
+public struct SessionGroup: Equatable, Sendable { public var title: String; public var sessions: [Session] }
+public enum SessionGrouping {
+    /// Groups "Today", "Yesterday", "Earlier" (in that order, empty groups omitted). Each group newest first. Future dates count as Today.
+    public static func group(_ sessions: [Session], now: Date, calendar: Calendar) -> [SessionGroup]
+}
+public enum Timecode {
+    public static func string(_ seconds: Double) -> String   // "mm:ss", or "h:mm:ss" from 1 h; truncates; negative -> "00:00"
+    public static func hms(_ seconds: Double) -> String      // always "HH:MM:SS"
+}
+public enum MeterGlyph {
+    /// db = 20*log10(max(peak, 1e-9)); db > -6 "█", > -12 "▇", > -18 "▆", > -24 "▅", > -36 "▄", > -48 "▃", > -60 "▂", else "▁".
+    public static func glyph(forPeak peak: Float) -> Character
+}
+public enum ProgressBar {
+    /// "[██████░░░░] 62%" with `cells` (default 10) cells; filled = floor(fraction * cells); fraction clamped to 0...1; NaN -> 0.
+    public static func text(fraction: Double, cells: Int = 10) -> String
+}
+public enum ProcessingStage: String, Codable, Sendable, CaseIterable {
+    case loadingModel, transcribing, merging, loadingNotesModel, enhancing, writing
+}
+extension ProcessingStage { public var title: String { /* loadingModel "Loading model", transcribing "Transcribing", merging "Merging", loadingNotesModel "Loading notes model", enhancing "Enhancing notes", writing "Writing files" */ } }
+```
+
+`ProcessingStage` is defined in `Core` right above (`Pipeline` imports it). Use `Timecode` everywhere: `Chunker.line`, `MarkdownRenderer`, the inspector.
+
+```swift
+@Suite struct SessionGroupingTests {
+    static var cal: Calendar { var c = Calendar(identifier: .gregorian); c.timeZone = TimeZone(identifier: "America/Los_Angeles")!; return c }
+    static let now = ISO8601DateFormatter().date(from: "2026-11-18T18:30:00Z")!        // 10:30 PST
+    func session(_ iso: String) -> Session {
+        var s = Session(title: iso, mode: .micOnly); s.createdAt = ISO8601DateFormatter().date(from: iso)!; return s
+    }
+    @Test func groups() {
+        let a = session("2026-11-18T18:00:00Z")      // 10:00 today
+        let b = session("2026-11-18T08:00:00Z")      // 00:00 today (boundary)
+        let c = session("2026-11-18T07:59:00Z")      // 23:59 yesterday
+        let d = session("2026-11-16T20:00:00Z")      // two days ago
+        let g = SessionGrouping.group([d, c, b, a], now: Self.now, calendar: Self.cal)
+        #expect(g.map(\.title) == ["Today", "Yesterday", "Earlier"])
+        #expect(g[0].sessions.map(\.id) == [a.id, b.id])
+        #expect(g[1].sessions.map(\.id) == [c.id] && g[2].sessions.map(\.id) == [d.id])
+    }
+    @Test func emptyGroupsOmitted() {
+        let g = SessionGrouping.group([session("2026-11-10T20:00:00Z")], now: Self.now, calendar: Self.cal)
+        #expect(g.map(\.title) == ["Earlier"])
+        #expect(SessionGrouping.group([], now: Self.now, calendar: Self.cal).isEmpty)
+    }
+    @Test func futureCountsAsToday() {
+        #expect(SessionGrouping.group([session("2026-11-19T20:00:00Z")], now: Self.now, calendar: Self.cal).first?.title == "Today")
+    }
+}
+@Suite struct HelperTests {
+    @Test func timecode() {
+        let cases: [(Double, String, String)] = [(0, "00:00", "00:00:00"), (12.9, "00:12", "00:00:12"), (59, "00:59", "00:00:59"),
+            (60, "01:00", "00:01:00"), (3599, "59:59", "00:59:59"), (3600, "1:00:00", "01:00:00"), (3661, "1:01:01", "01:01:01"), (-5, "00:00", "00:00:00")]
+        for (s, a, b) in cases { #expect(Timecode.string(s) == a); #expect(Timecode.hms(s) == b) }
+    }
+    @Test func meterGlyphs() {
+        let cases: [(Float, Character)] = [(1.0, "█"), (0.5, "▇"), (0.25, "▆"), (0.125, "▅"), (0.0625, "▄"), (0.01, "▃"), (0.002, "▂"), (0.0005, "▁"), (0, "▁")]
+        for (p, g) in cases { #expect(MeterGlyph.glyph(forPeak: p) == g, "peak \(p)") }
+    }
+    @Test func progressBar() {
+        #expect(ProgressBar.text(fraction: 0) == "[░░░░░░░░░░] 0%")
+        #expect(ProgressBar.text(fraction: 0.62) == "[██████░░░░] 62%")
+        #expect(ProgressBar.text(fraction: 1) == "[██████████] 100%")
+        #expect(ProgressBar.text(fraction: 7) == "[██████████] 100%" && ProgressBar.text(fraction: -1) == "[░░░░░░░░░░] 0%")
+        #expect(ProgressBar.text(fraction: .nan) == "[░░░░░░░░░░] 0%")
+        #expect(ProgressBar.text(fraction: 0.5, cells: 4) == "[██░░] 50%")
+    }
+    @Test func stageTitles() { for s in ProcessingStage.allCases { #expect(!s.title.isEmpty) } }
+}
+```
+
+Fill in nothing else: every test above is complete. Percent in `ProgressBar` = `Int(fraction.clamped * 100)` truncated.
+
+Exit check P1: `cd Packages/Core && swift test` all green, ≥ 35 test cases.
 
 ---
 
@@ -1721,7 +2083,16 @@ func writeSine(to url: URL, freq: Double, seconds: Double, sampleRate: Double, a
     for i in 0..<Int(n) { buf.floatChannelData![0][i] = amplitude * Float(sin(2 * .pi * freq * Double(i) / sampleRate)) }
     try file.write(from: buf)
 }
-func writeSilence(to url: URL, seconds: Double, sampleRate: Double) throws { /* same as above with all zeros */ }
+func writeSilence(to url: URL, seconds: Double, sampleRate: Double) throws {
+    let settings: [String: Any] = [AVFormatIDKey: kAudioFormatLinearPCM, AVSampleRateKey: sampleRate, AVNumberOfChannelsKey: 1,
+                                   AVLinearPCMBitDepthKey: 16, AVLinearPCMIsFloatKey: false, AVLinearPCMIsBigEndianKey: false]
+    let file = try AVAudioFile(forWriting: url, settings: settings)
+    let fmt = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1)!
+    let n = AVAudioFrameCount(seconds * sampleRate)
+    let buf = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: n)!; buf.frameLength = n
+    for i in 0..<Int(n) { buf.floatChannelData![0][i] = 0 }
+    try file.write(from: buf)
+}
 func readChannels(_ url: URL) throws -> (channels: [[Float]], sampleRate: Double) {
     let f = try AVAudioFile(forReading: url)
     let buf = AVAudioPCMBuffer(pcmFormat: f.processingFormat, frameCapacity: AVAudioFrameCount(f.length))!
@@ -1771,6 +2142,16 @@ More tests (write them all):
 - `outputIsAAC`: `AVAudioFile` reports 48,000 Hz; file size for 3 s stereo is between 30 KB and 90 KB.
 
 Exit check P4 (software): `cd Packages/Capture && swift test` green; `swift test --sanitize=thread` green; `scripts/check-realtime.sh` prints PASS.
+
+### 25.9 `CenteredMix` (in-app player's Center toggle and the optional centered export)
+
+```swift
+public enum CenteredMix {
+    /// Reads any audio file; writes a 48 kHz mono 16-bit WAV (or AAC if `output` ends in .m4a) whose samples are the mean of all channels. Streams in 1 s blocks.
+    public static func write(from source: URL, to output: URL) throws
+}
+```
+Test: build a stereo `.m4a` with `Finalizer` (440 Hz mic, 880 Hz app) → `CenteredMix.write` → result has 1 channel, 48,000 Hz, duration within 0.15 s, and **both** 440 Hz and 880 Hz present (each Goertzel power > 20× the power at 1,500 Hz). A mono source passes through unchanged (samples equal within 1e-4). A missing file throws.
 
 ---
 
@@ -1913,7 +2294,7 @@ Tests (use `CharTokenCounter(perToken: 4)`):
 - **Coverage:** every segment index `0..<n` lies in at least one chunk's `firstSegment...lastSegment`; first chunk starts at 0; last chunk ends at `n-1`.
 - **Order/progress:** `firstSegment` non-decreasing and strictly greater than the previous chunk's `firstSegment`; `lastSegment` non-decreasing.
 - **Overlap:** with `overlapFraction: 0.1` and many short segments, `chunk[k+1].firstSegment <= chunk[k].lastSegment`; with `0`, `chunk[k+1].firstSegment == chunk[k].lastSegment + 1`.
-- **Oversize line:** one 5,000-character segment, `maxTokens: 100` → every piece ≤ 100 tokens and the words of all pieces, concatenated in order, equal the original words.
+- **Oversize line:** one 5,000-character segment, `maxTokens: 100`, `overlapFraction: 0` → every piece ≤ 100 tokens and the words of all pieces, concatenated in order, equal the original words.
 - **Scale:** 720 segments, segment *k* starting at `4k` seconds, each text exactly 50 characters (a line is 62 characters ≈ 16 tokens, plus 1 for the join ≈ 12,200 tokens in total), `maxTokens: 1196` → between 10 and 14 chunks.
 - **Determinism:** two runs produce equal arrays.
 
@@ -1954,6 +2335,44 @@ Tests with `FakeNotesGenerator` + `CharTokenCounter(perToken: 4)` + `sleep: { _ 
 - `reduceBatches`: 40 digests × ~200 tokens → every `merge` call's input fits ≤ `chunkTokens`; final `finalize` receives one digest; `merge` call count ≥ 2.
 - `cancellation`: cancel the task after the first `digest` → returns promptly, `notes == nil`, warning `"Cancelled."`, no further calls.
 - `finalizeContextExceededRetries`: first `finalize` throws `.contextExceeded` → second call has empty notes; `notes != nil`; warning present.
+
+Exemplar (write the remaining pipeline tests in exactly this style):
+
+```swift
+import Testing
+@testable import Enhance
+import Core
+import CoreTestSupport
+
+@Suite struct NotesPipelineTests {
+    static func segments(_ n: Int) -> [TranscriptSegment] {
+        (0..<n).map { TranscriptSegment(start: Double($0 * 4), end: Double($0 * 4 + 3), text: String(repeating: "x", count: 50), speaker: .me) }
+    }
+    static func digest(_ s: String) -> ChunkDigest {
+        ChunkDigest(topics: ["t"], decisions: [], actionItems: [], questions: [], keyPoints: [String(s.prefix(10))], unavailable: false)
+    }
+    @Test func happyPath() async {
+        let gen = FakeNotesGenerator(); gen.onDigest = { Self.digest($0) }
+        let p = NotesPipeline(generator: gen, counter: CharTokenCounter(perToken: 4), sleep: { _ in })
+        let r = await p.run(segments: Self.segments(720), userNotes: "my notes", onProgress: { _ in })
+        #expect(r.notes != nil && r.warnings.isEmpty)
+        #expect((10...14).contains(gen.digestInputs.count))
+        #expect(gen.finalizeInputs.count == 1 && gen.finalizeInputs[0].notes == "my notes")
+    }
+    @Test func refusedChunkIsSkipped() async {
+        let gen = FakeNotesGenerator()
+        gen.onDigest = { [unowned gen] text in
+            if gen.digestInputs.count == 3 { throw GeneratorError.refused }
+            return Self.digest(text)
+        }
+        let p = NotesPipeline(generator: gen, counter: CharTokenCounter(perToken: 4), sleep: { _ in })
+        let r = await p.run(segments: Self.segments(720), userNotes: "", onProgress: { _ in })
+        #expect(r.warnings.count == 1 && r.warnings[0].contains("Chunk 3"))
+        #expect(r.notes != nil)
+        #expect(r.digests.filter(\.unavailable).count == 1)
+    }
+}
+```
 
 ### 27.4 Foundation Models adapter (**[VERIFY]**)
 
@@ -2007,7 +2426,7 @@ public enum PathMath {
     public static func encodeLinkTarget(_ path: String) -> String
 }
 enum YAML {
-    /// Plain when safe; otherwise double-quoted with \\ \" \n escaped. Quote if: empty; leading/trailing space; contains ": ", " #", '"', or newline;
+    /// Plain when safe; otherwise double-quoted with \\ \" \n escaped. Quote if: empty; leading/trailing space; contains ":", " #", '"', or newline;
     /// starts with one of - ? : , [ ] { } # & * ! | > ' % @ `; or equals (case-insensitive) true/false/yes/no/null/~; or parses as a number.
     static func scalar(_ s: String) -> String
 }
@@ -2041,7 +2460,7 @@ Tests (table-driven, write all rows):
 | `/Users/me/Notes` → `/Volumes/Ext/Audio/x.m4a` | `nil` |
 
 - `encodeLinkTarget("../Audio/2026-11-18 1030 Weekly sync.m4a")` → `../Audio/2026-11-18%201030%20Weekly%20sync.m4a`; `a (1).m4a` → `a%20%281%29.m4a`.
-- `YAML.scalar`: `Weekly sync` → plain; `Q4: plan` → `"Q4: plan"`; `- item` → quoted; `true` → `"true"`; `123` → `"123"`; empty → `""`; `He said "hi"` → `"He said \"hi\""`; `C# notes` → `"C# notes"`; `a#b` → plain; `trailing ` → quoted; `line1\nline2` → `"line1\nline2"`.
+- `YAML.scalar`: `Weekly sync` → plain; `Q4: plan` → `"Q4: plan"`; `- item` → quoted; `true` → `"true"`; `123` → `"123"`; empty → `""`; `He said "hi"` → `"He said \"hi\""`; `C #notes` → `"C #notes"`; `C# notes` → plain; `a#b` → plain; `1:1 sync` → `"1:1 sync"`; `trailing ` → quoted; `line1\nline2` → `"line1\nline2"`.
 
 ### 28.2 `MarkdownRenderer` (pure; golden tests)
 
@@ -2304,9 +2723,7 @@ UI test (`AppleRecorderUITests`): launch with `--uitest-fresh-store`; click the 
 Depends on `Core`, `Enhance`, `Output`. Everything real is injected, so the 8 GB rule and failure handling are unit-tested.
 
 ```swift
-public enum ProcessingStage: String, Codable, Sendable, CaseIterable {
-    case loadingModel, transcribing, merging, loadingNotesModel, enhancing, writing
-}
+// ProcessingStage is defined in Core (§24.7).
 public struct ProcessingDependencies: Sendable {
     public var transcribe: @Sendable (_ audio: URL, _ mode: CaptureMode, _ vocabulary: [String],
                                       _ progress: @escaping @Sendable (Double) -> Void) async throws -> [TranscriptSegment]
@@ -2429,6 +2846,282 @@ Rules: **no glass inside the capsule** (no `.glass` button styles, no nested `gl
 
 Owns: `FileSessionStore`, `SettingsStore`, current `Session`, notes text, `ProcessingCoordinator`, `TapSession`/`MicSession`/`TrackWriter`s, theme. Methods: `newSession()`, `toggleRecording()` (arm → probe → record → stop → `Finalizer` → state `.stopped`), `transcribeAndEnhance()`, `cancelProcessing()`, `importAudio(_:)` (copy to audio folder, state `.stopped`), `confirmDiscard()`, `reveal()`. Rules: record only after `consentAcknowledged`; refuse to start when the audio folder status is not `.ok` (show the banner); autosave notes; on launch call `recoverInterrupted()` and show a banner per recovered session; the `Finalizer` output goes to the audio folder via a temp name then atomic rename; temp tracks are deleted only after `Finalizer` returns without error.
 
+### 30.6 Screens (reference SwiftUI; **uncompiled**, adjust to the SDK; behavior rules are the contract)
+
+`AppModel` shape (fields the views below use; methods per §30.5):
+
+```swift
+enum SignalState { case unknown, ok, noSignal }
+struct Banner: Identifiable { let id = UUID(); var text: String; var actionTitle: String?; var action: (@MainActor () -> Void)? }
+
+@Observable @MainActor final class AppModel {
+    var settings = AppSettings() { didSet { scheduleSettingsSave() } }     // debounce 0.5 s -> SettingsStore.save
+    private(set) var sessions: [Session] = []
+    var selectedID: UUID?
+    var notesText = ""                      // bound to the editor; autosaved every 2 s (§10.5)
+    var searchText = ""
+    var capsule: CapsuleState = .idle
+    var progress = 0.0                      // 0...1 of the current processing stage
+    var elapsed: TimeInterval = 0
+    var levels: (mic: Float, app: Float) = (0, 0)
+    var signal: SignalState = .unknown
+    var banners: [Banner] = []
+    var mode: CaptureMode = .appAndMic
+    var sources: [AppEntry] = []
+    var selectedSource: AppEntry.ID?
+    var transcript: [TranscriptSegment] = []
+    var needsConsent: Bool { !settings.consentAcknowledged }
+    var isRecording: Bool { capsule == .recording }
+    var canProcess: Bool { capsule == .stopped || capsule == .done }
+    var filteredSessions: [Session] { /* title / notes / transcript contains searchText, case-insensitive; all when empty */ }
+    var activeTheme: Theme? { BuiltInThemes.theme(id: settings.themeID) }     // nil = System
+}
+```
+
+```swift
+struct SidebarView: View {
+    @Environment(AppModel.self) private var model
+    var body: some View {
+        @Bindable var model = model
+        List(selection: $model.selectedID) {
+            ForEach(SessionGrouping.group(model.filteredSessions, now: .now, calendar: .current), id: \.title) { group in
+                Section(group.title) {
+                    ForEach(group.sessions) { s in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(s.title).lineLimit(1)
+                            Text(s.createdAt, style: .time).font(.caption).foregroundStyle(.secondary)
+                        }
+                        .tag(s.id)
+                        .contextMenu {
+                            Button("Reveal in Finder") { model.reveal(s) }
+                            Button("Re-transcribe") { model.retranscribe(s) }.disabled(s.audioPath == nil)
+                            Divider()
+                            Button("Delete…", role: .destructive) { model.requestDelete(s) }      // always asks for confirmation
+                        }
+                    }
+                }
+            }
+        }
+        .overlay { if model.sessions.isEmpty { ContentUnavailableView("No sessions", systemImage: "waveform", description: Text("⌘N to start.")) } }
+        .navigationSplitViewColumnWidth(min: 200, ideal: 240)
+    }
+}
+
+struct EditorPane: View {
+    @Environment(AppModel.self) private var model
+    var body: some View {
+        @Bindable var model = model
+        VStack(spacing: 0) {
+            ForEach(model.banners) { b in
+                HStack { Text(b.text); Spacer(); if let t = b.actionTitle { Button(t) { b.action?() } } }
+                    .padding(.horizontal, 12).padding(.vertical, 8).background(.quaternary)
+            }
+            MarkdownTextView(text: $model.notesText, theme: model.activeTheme,
+                             fontName: model.settings.editorFontName, fontSize: model.settings.editorFontSize)
+        }
+    }
+}
+
+struct InspectorView: View {
+    @Environment(AppModel.self) private var model
+    var body: some View {
+        VStack(spacing: 0) {
+            List(Array(model.transcript.enumerated()), id: \.offset) { _, seg in
+                Button { model.player.seek(to: seg.start) } label: {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(Timecode.string(seg.start)).monospacedDigit().foregroundStyle(.secondary)
+                        if let s = seg.speaker { Text(s.rawValue).bold() }
+                        Text(seg.text)
+                    }
+                }.buttonStyle(.plain)
+            }
+            .overlay { if model.transcript.isEmpty { ContentUnavailableView("No transcript yet", systemImage: "text.alignleft") } }
+            Divider()
+            PlayerBar()
+        }
+        .inspectorColumnWidth(min: 260, ideal: 320)
+    }
+}
+
+@Observable @MainActor final class AudioPlayerModel {
+    var isPlaying = false, centered = false { didSet { reloadForCenter() } }
+    var position: TimeInterval = 0, duration: TimeInterval = 0
+    func load(_ url: URL) { /* AVAudioPlayer(contentsOf:); keep the original URL */ }
+    func toggle() { /* play / pause */ }
+    func seek(to t: TimeInterval) { /* clamp to 0...duration */ }
+    private func reloadForCenter() { /* when centered: CenteredMix.write(from: original, to: <session temp dir>/centered.wav) once, then play that file at the same position; when off: reload the original */ }
+}
+struct PlayerBar: View {
+    @Environment(AppModel.self) private var model
+    var body: some View {
+        @Bindable var player = model.player
+        HStack {
+            Button { player.toggle() } label: { Image(systemName: player.isPlaying ? "pause.fill" : "play.fill") }.buttonStyle(.plain)
+                .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
+            Slider(value: $player.position, in: 0...max(player.duration, 1)) { editing in if !editing { player.seek(to: player.position) } }
+            Toggle("Center", isOn: $player.centered).toggleStyle(.button)
+        }.padding(8)
+    }
+}
+```
+
+Capsule parts (plain controls inside the glass capsule; **no glass inside glass**):
+
+```swift
+struct ModeMenu: View {
+    @Environment(AppModel.self) private var model
+    var body: some View {
+        @Bindable var model = model
+        Picker("Mode", selection: $model.mode) {
+            Text("App + Mic").tag(CaptureMode.appAndMic); Text("Mic only").tag(CaptureMode.micOnly); Text("App only").tag(CaptureMode.appOnly)
+        }.pickerStyle(.menu).labelsHidden()
+    }
+}
+struct SourceMenu: View {
+    @Environment(AppModel.self) private var model
+    var body: some View {
+        @Bindable var model = model
+        Picker("Source", selection: $model.selectedSource) {
+            ForEach(model.sources) { Text($0.displayName + ($0.isRunningOutput ? "  ●" : "")).tag(Optional($0.id)) }
+        }.pickerStyle(.menu).labelsHidden().disabled(!model.mode.hasApp)
+    }
+}
+struct SignalBadge: View {
+    @Environment(AppModel.self) private var model
+    var body: some View {
+        switch model.signal {
+        case .ok: Label("Source OK", systemImage: "checkmark.circle")
+        case .noSignal: Label("No signal", systemImage: "exclamationmark.triangle")
+        case .unknown: Label("Checking…", systemImage: "ellipsis.circle")
+        }
+    }
+}
+struct TimerText: View { @Environment(AppModel.self) private var model; var body: some View { Text(Timecode.string(model.elapsed)).monospacedDigit() } }
+struct LevelMeters: View {
+    @Environment(AppModel.self) private var model
+    var body: some View {
+        HStack(spacing: 6) {
+            if model.mode.hasMic { Text("Mic \(String(MeterGlyph.glyph(forPeak: model.levels.mic)))") }
+            if model.mode.hasApp { Text("App \(String(MeterGlyph.glyph(forPeak: model.levels.app)))") }
+        }.font(.system(.body, design: .monospaced)).accessibilityLabel("Input levels")
+    }
+}
+struct StageProgressView: View {
+    let stage: ProcessingStage; let progress: Double
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(stage.title).font(.headline)
+            Text(ProgressBar.text(fraction: progress)).font(.system(.caption, design: .monospaced))
+            Text("Recording and notes are safe.").font(.caption).foregroundStyle(.secondary)
+        }
+    }
+}
+```
+
+Consent sheet (blocking; shown whenever `needsConsent`):
+
+```swift
+struct ConsentSheet: View {
+    @Environment(AppModel.self) private var model
+    @State private var agreed = false
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Before you record").font(.title2).bold()
+            Text("Recording laws vary. California and many other states require every party's consent for confidential conversations. You are the person recording. Tell everyone present before you press Record, including people in the room when you use Mic only.")
+            Text("Audio and transcripts stay on this Mac. This is not legal advice.").foregroundStyle(.secondary)
+            Toggle("I understand and will get consent where it is required.", isOn: $agreed)
+            HStack { Spacer(); Button("I Understand") { model.acknowledgeConsent() }.buttonStyle(.borderedProminent).disabled(!agreed) }
+        }
+        .padding(24).frame(width: 460).interactiveDismissDisabled()
+    }
+}
+```
+
+Settings (tabs; each tab is a `Form` with `.formStyle(.grouped)`):
+
+```swift
+struct SettingsView: View {
+    var body: some View {
+        TabView {
+            GeneralTab().tabItem { Label("General", systemImage: "gearshape") }
+            CaptureTab().tabItem { Label("Capture", systemImage: "waveform") }
+            TranscriptionTab().tabItem { Label("Transcription", systemImage: "text.bubble") }
+            NotesAITab().tabItem { Label("Notes AI", systemImage: "sparkles") }
+            OutputTab().tabItem { Label("Output", systemImage: "folder") }
+            AppearanceTab().tabItem { Label("Appearance", systemImage: "paintpalette") }
+            LegalTab().tabItem { Label("Legal", systemImage: "doc.text") }
+        }.frame(width: 540, height: 440)
+    }
+}
+struct OutputTab: View {
+    @Environment(AppModel.self) private var model
+    var body: some View {
+        @Bindable var model = model
+        Form {
+            Section("Folders") {
+                LabeledContent("Notes folder") { Text(model.settings.notesFolderPath ?? "Not set").lineLimit(1).truncationMode(.middle); Button("Choose…") { model.chooseNotesFolder() } }
+                LabeledContent("Audio folder") { Text(model.settings.audioFolderPath ?? "Not set").lineLimit(1).truncationMode(.middle); Button("Choose…") { model.chooseAudioFolder() } }
+            }
+            Section("Markdown") {
+                Toggle("Include frontmatter", isOn: $model.settings.frontmatter)
+                Picker("Audio link style", selection: $model.settings.audioLinkStyle) {
+                    Text("Markdown link").tag(AudioLinkStyle.markdownLink); Text("Obsidian embed").tag(AudioLinkStyle.wikiEmbed)
+                }
+                Toggle("Also export a centered mix", isOn: $model.settings.exportCenteredMix)
+            }
+        }.formStyle(.grouped)
+    }
+}
+struct TranscriptionTab: View {
+    @Environment(AppModel.self) private var model
+    var body: some View {
+        @Bindable var model = model
+        Form {
+            Picker("Model", selection: $model.settings.transcriptionModel) {
+                ForEach(ModelCatalog.all, id: \.name) { Text("\($0.name)  (~\($0.approxMB) MB)").tag($0.name) }
+            }
+            Section("Vocabulary (one term per line)") {
+                TextEditor(text: Binding(get: { model.settings.vocabulary.joined(separator: "\n") },
+                                         set: { model.settings.vocabulary = $0.split(separator: "\n").map(String.init) }))
+                    .frame(height: 100).font(.body.monospaced())
+            }
+        }.formStyle(.grouped)
+    }
+}
+struct NotesAITab: View {
+    var body: some View {
+        let a = FoundationNotesGenerator.availability()
+        Form {
+            LabeledContent("Model", value: "Apple Foundation Models (on device)")
+            LabeledContent("Status", value: a.ok ? "Available" : (a.reason ?? "Unavailable"))
+            Text("Transcript-only notes are written when the model is unavailable. Nothing is sent to a server.").foregroundStyle(.secondary)
+        }.formStyle(.grouped)
+    }
+}
+struct AppearanceTab: View {
+    @Environment(AppModel.self) private var model
+    var body: some View {
+        @Bindable var model = model
+        Form {
+            Picker("Chrome", selection: $model.settings.chrome) { Text("Native (Liquid Glass)").tag(ChromeStyle.native); Text("Terminal (v1.1)").tag(ChromeStyle.terminal) }
+                .disabled(true)       // enabled in v1.1
+            Picker("Editor theme", selection: $model.settings.themeID) {
+                Text("System").tag(SystemTheme.id)
+                ForEach(BuiltInThemes.all) { Text($0.name).tag($0.id) }
+            }
+            Toggle("Match window to theme", isOn: $model.settings.matchWindowToTheme)
+            Picker("Editor font", selection: Binding(get: { model.settings.editorFontName ?? "" }, set: { model.settings.editorFontName = $0.isEmpty ? nil : $0 })) {
+                Text("System").tag(""); Text("SF Mono").tag("SF Mono"); Text("Geist Mono").tag("Geist Mono"); Text("Departure Mono").tag("Departure Mono")
+            }
+            Stepper("Font size: \(Int(model.settings.editorFontSize))", value: $model.settings.editorFontSize, in: 12...24)
+        }.formStyle(.grouped)
+    }
+}
+```
+`GeneralTab`, `CaptureTab`, `LegalTab`: one `Form` each with the controls named in §12 (bind to `AppSettings`; Legal has "Show consent again" → `model.settings.consentAcknowledged = false`, plus a link to `THIRD-PARTY-LICENSES.md`). `FolderPicker` = `NSOpenPanel` (`canChooseDirectories`, no files) in `AppModel.chooseNotesFolder/chooseAudioFolder`; after choosing, run `FolderCheck.status` and show a banner unless `.ok`.
+
+UI acceptance (UI tests, `AppleRecorderUITests`): launch with `--uitest-fresh-store` → the consent sheet appears and **Record is disabled** until "I Understand" is clicked; after consent the sidebar shows "No sessions"; ⌘N creates a session; Settings opens with ⌘, and shows seven tabs; changing the transcription model to `base` persists across a relaunch.
+
 ---
 
 ## 31. Self-tests, verify script, CI
@@ -2463,6 +3156,7 @@ run() { local name="$1"; shift; local log="/tmp/ar_verify_${name//[^A-Za-z0-9]/_
 for p in $PKGS; do run "unit: $p" bash -c "cd Packages/$p && swift test"; done
 run "tsan: Capture" bash -c "cd Packages/Capture && swift test --sanitize=thread"
 run "realtime check" ./scripts/check-realtime.sh
+run "spec tests untouched" ./scripts/protect-tests.sh
 run "no secrets tracked" bash -c "! git ls-files | grep -E '\.p12\$|release-key\.pem\$|\.env\$'"
 run "app build (strict concurrency)" make build
 if [ "${1:-}" = "--selftests" ]; then
@@ -2490,7 +3184,11 @@ jobs:
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # protect-tests.sh needs the spec-v1 tag
+          fetch-tags: true
       - run: brew install xcodegen
+      - run: ./scripts/protect-tests.sh
       - run: make test
       - run: ./scripts/check-realtime.sh
       - run: make build
@@ -2507,18 +3205,19 @@ Each step: do it, run the exit check, commit, update `PROGRESS.md`. **At the end
 | Step | Deliverable | Exit check |
 |---|---|---|
 | **P0.0** | Get the repo (§22.6): clone `git@github.com:corbinwrites/AppleRecorder.git` or unzip the seed repo; `git pull --rebase origin main`; confirm `docs/BUILD-GUIDE.md` and `AGENTS.md` exist; copy the legacy spike scripts from `~/Hal9000/projects/local-spikes/Scripts/` into `Spikes/legacy-scripts/` (**NEEDS HUMAN** if the builder cannot reach that folder); push | `git status` clean; `git log origin/main` shows the seed commit on top of `Initial commit`; push succeeded or is marked `NEEDS HUMAN` |
-| **P0.1** | Repo tree (§22.1), eight `Package.swift` files (Core, Capture, Transcribe, Enhance, Output, Theme, EditorKit, Pipeline), `project.yml`, `Makefile`, `scripts/*`, one placeholder passing test per package | `make test` green; `xcodegen generate` and `make build` succeed |
+| **P0.1** | Repo tree (§22.1), eight `Package.swift` files (Core, Capture, Transcribe, Enhance, Output, Theme, EditorKit, Pipeline), `project.yml`, `Makefile`, `scripts/*` (all of §20.1–20.8, §25.1, §31.2), `.github/workflows/ci.yml` (§31.3), first `README.md` (§22.6), a `PlaceholderTests.swift` in each package that has no seeded spec tests (P0.3 deletes the placeholders) | `xcodegen generate` and `make build` succeed; `swift build` succeeds in every package. Tests stay red until P0.3 and P1+ (expected) |
 | **P0.2** | API spike (§23) + `docs/API-NOTES.md` | `swift build` in `Spikes/ApiCheck` succeeds; every **[VERIFY]** item is resolved or listed in `BLOCKERS.md` |
-| **P1** | Core package (§24) | `cd Packages/Core && swift test`: ≥ 20 tests green; builds clean with `-warnings-as-errors` |
+| **P0.3** | **Strong model or human on a Mac.** Stubs for every public API in Part 2 (throw `TODO.notImplemented` or `fatalError`), every prose-specified test written into `Packages/*/Tests`, the gaps listed in `docs/tasks/P0.3.md` resolved, placeholders deleted. Then `git tag spec-v1` and push the tag | `swift build --build-tests` succeeds in every package; `swift test` fails only by assertion or TODO, never by compile error; `scripts/protect-tests.sh` prints PASS |
+| **P1** | Core package (§24.1–24.7) | `cd Packages/Core && swift test`: ≥ 35 tests green; builds clean with `-warnings-as-errors` |
 | **P2** | Output package (§28) | All Output tests green, including the golden file and link-resolution tests |
 | **P3** | Theme + EditorKit logic (§29.1–29.3) | All tests green; every built-in theme `validate == []`; tokenizer table (34 rows) and property tests green |
-| **P4** | Capture software parts: `RingBuffer`, `ZeroRunDetector`, `HostClock`, `ProcessCatalog`, `TrackWriter`, `Finalizer`, `RealtimeCallback.swift` (§25.1–25.5, 25.7, 25.8) | `swift test` green; `swift test --sanitize=thread` green; `scripts/check-realtime.sh` prints PASS |
+| **P4** | Capture software parts: `RingBuffer`, `ZeroRunDetector`, `HostClock`, `ProcessCatalog`, `TrackWriter`, `Finalizer`, `RealtimeCallback.swift` (§25.1–25.5, 25.7–25.9) | `swift test` green; `swift test --sanitize=thread` green; `scripts/check-realtime.sh` prints PASS |
 | **P5** | Transcribe package: extractor, cleaner, vocabulary, merger, filter, silence map, orchestrator, `WhisperEngine`, `ModelCatalog` (§26) | Unit tests green. `AR_INTEGRATION=1 swift test --filter Integration` passes, or mark `NEEDS HUMAN` |
 | **P6** | Enhance package (§27) + Pipeline package `ProcessingCoordinator` (§30.1) + `capsuleState` (§30.2) | All tests green; the 8 GB-rule test (`whisperUnloadedBeforeEnhancement`) green |
 | **P7** | Hardware capture: `TapSession`, `AudioProcessEnumerator`, `MicSession`, selftests `capture-tone`, `mic-probe`, `cpu-60s` (§25.6, §31) | Build succeeds. **NEEDS HUMAN:** run `make selftest` on the M1; `capture-tone` must be `PASS`. If it prints "zero buffers", follow §2's L1 checklist and report; do not continue to P8 shipping |
-| **P8** | App shell (§30.3–30.5), `RecordCapsule`, Settings, consent sheet, menu bar, import, `MarkdownTextView` (§29.4), UI test | `make build` succeeds; `xcodebuild test` UI test green; app launches (`open build/…/AppleRecorder.app`) |
+| **P8** | App shell (§30.3–30.6), `RecordCapsule`, Settings, consent sheet, menu bar, import, `MarkdownTextView` (§29.4), UI test | `make build` succeeds; `xcodebuild test` UI test green; app launches (`open build/…/AppleRecorder.app`) |
 | **P9** | Integration: wire `AppModel` to capture, finalizer, coordinator, exporter; settings persistence; recovery on launch | `./scripts/verify.sh --selftests` shows no `FAIL`; every checkbox in §33.2 that is marked *auto* passes |
-| **P10** | Release (§20, §22.6): `scripts/make-release-cert.sh`, `sign-release.sh`, `verify-signing.sh`, `release.yml`, cask file, final `README.md`. **NEEDS HUMAN:** create the GitHub `release` environment and secrets, create the `corbinwrites/homebrew-tap` repo, push tags `v0.0.1` then `v0.0.2` | `verify-signing.sh` passes on a CI-signed build; the second-Mac update test (§20.4) passes; GitHub Release `v1.0.0` exists with zip, DMG, SHA-256 |
+| **P10** | Release (§20, §22.6): release scripts and workflow from §20.1–20.8 (`make-release-cert.sh`, `sign-release.sh`, `verify-signing.sh`, `release.yml`, `print-cask.sh`), final `README.md`. **NEEDS HUMAN:** create the GitHub `release` environment and secrets, create the `corbinwrites/homebrew-tap` repo, push tags `v0.0.1` then `v0.0.2` | `verify-signing.sh` passes on a CI-signed build; the second-Mac update test (§20.4) passes; GitHub Release `v1.0.0` exists with zip, DMG, SHA-256 |
 
 `PROGRESS.md` is complete only when every step is `done` or `NEEDS HUMAN` with a reason.
 
@@ -2564,6 +3263,9 @@ Each step: do it, run the exit check, commit, update `PROGRESS.md`. **At the end
 | Stage order and resumability (§4.3, §11.2) | `happyPathStageOrder`, `existingTranscriptSkipsTranscription` |
 | Settings defaults (§12) | `SettingsTests` |
 | Release identity (§17, §20) | `verify-signing.sh`; second-Mac test |
+| Centered playback / export (§5.3) | `CenteredMix` tests (§25.9) |
+| Sidebar grouping, timecodes, meters (§9.3, §11) | `SessionGroupingTests`, `HelperTests` (§24.7) |
+| Consent before recording (§11.5, §14) | UI test: Record disabled until consent (§30.6) |
 
 ### 33.2 Acceptance checklist (§15.3), with how each is verified
 
@@ -2593,3 +3295,25 @@ Each step: do it, run the exit check, commit, update `PROGRESS.md`. **At the end
 4. 60-minute run: record a 60-minute meeting-style session; confirm no dropped-sample warning, drift ≤ 200 ms (clap at start and end, compare in Audacity/ffmpeg), then transcribe and enhance; record wall times and peak RAM (Instruments).
 5. Room test: Mic-only, 3+ speakers, laptop 1–2 m away (Fixture D). Record WER with `small` and with `large-v3-v20240930_626MB`.
 6. Report results in `PROGRESS.md`.
+
+---
+
+## 34. Verification status (read before trusting the code)
+
+**Checked (2026-11-19).** `docs/reference/validate_logic.py` is a Python reference implementation of the pure logic in this guide, run against the guide's own test tables:
+
+- `ZeroRunDetector` (7 cases), `HostClock` conversion and offset math, `FileNaming.sanitize` (12 rows) and `baseName`, `PathMath.relativePath` (6 rows) and link encoding, `YAML.scalar` (13 rows)
+- `ListContinuation.onEnter` (18 rows), `TaskToggle` (10 rows), `indent/outdent`
+- The Markdown tokenizer: **all 34 table rows** plus 1,000 random inputs without a crash
+- `Chunker`: budget, coverage, ordering, overlap, oversize split, line format, and the 720-segment scale case (12 chunks)
+- The full `MarkdownRenderer` golden output, compared **byte for byte** with the expected block in §28.2
+- Theme contrast: all nine built-in themes pass the §29.1 thresholds (lowest ink 4.99, accent 3.26, heading 2.97, muted 2.43)
+
+**What that found and fixed:** the `C# notes` YAML row contradicted its own rule; the oversize-line chunker test conflicted with default overlap (it now sets `overlapFraction: 0`); `1:1 sync` needed quoting (the rule now quotes any `:`).
+
+**Not verified:**
+- **No Swift has been compiled.** This sandbox has no Swift toolchain. The Python check proves the *tables are consistent and satisfiable*. It does not prove the Swift code compiles or passes. P0.2 and each phase's `swift test` are the real check.
+- UTF-16 offsets in the tokenizer (Python used code points), Core Audio calls, WhisperKit and Foundation Models API names, SwiftUI/Liquid Glass modifiers, and every hardware behavior.
+- The `Pipeline` and `Finalizer` behaviors are specified precisely but were not executed.
+
+**Use the reference:** if a Swift test table and the Swift output disagree, run `python3 docs/reference/validate_logic.py docs/BUILD-GUIDE.md`. If Python agrees with the table, fix the Swift. If Python disagrees with the table, write `BLOCKERS.md`.

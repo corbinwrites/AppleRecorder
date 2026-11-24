@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Install with: make hooks   (git config core.hooksPath scripts/hooks)
+# Skip the unit-test part only when you must: SKIP_HOOK_TESTS=1 git commit ...
+cd "$(git rev-parse --show-toplevel)" || exit 1
+STAGED="$(git diff --cached --name-only)"
+if echo "$STAGED" | grep -Eq '(\.p12|release-key\.pem|\.env)$'; then echo "pre-commit: a secret file is staged. Aborting."; exit 1; fi
+./scripts/protect-tests.sh || exit 1
+[ -f scripts/check-realtime.sh ] && { ./scripts/check-realtime.sh || exit 1; }
+[ "${SKIP_HOOK_TESTS:-0}" = "1" ] && exit 0
+PKGS="$(echo "$STAGED" | sed -n 's#^Packages/\([^/]*\)/.*#\1#p' | sort -u)"
+if echo "$PKGS" | grep -qx Core; then PKGS="Core Capture Transcribe Enhance Output Theme EditorKit Pipeline"; fi
+for p in $PKGS; do
+  [ -f "Packages/$p/Package.swift" ] || continue
+  echo "pre-commit: swift test ($p)"; (cd "Packages/$p" && swift test) || { echo "pre-commit: $p tests failed"; exit 1; }
+done
+exit 0
