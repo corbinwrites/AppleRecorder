@@ -6,7 +6,7 @@ Statuses: pending / done / blocked / NEEDS HUMAN.
 |---|---|---|---|
 | P0.0 | Get the repo, first push | done | f85ba20 (legacy spike scripts, SDK API dumps) |
 | P0.1 | Scaffold: tree, packages, project.yml, Makefile, scripts, CI | done | make gen && swift build (8 pkgs) && make build PASS |
-| P0.2 | API verification spike | pending | |
+| P0.2 | API verification spike | done | swift build in Spikes/ApiCheck PASS |
 | P1 | Core package | pending | |
 | P2 | Output package | pending | |
 | P3 | Theme + EditorKit logic | pending | |
