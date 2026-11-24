@@ -19,6 +19,7 @@ Work agents cannot do. Tick as you go; record macOS version and date for hardwar
 - [ ] `git tag spec-v1 && git push origin main spec-v1`. Only you move this tag.
 
 ## Hardware steps (M1)
+- [ ] P6: with Apple Intelligence enabled, run `AR_INTEGRATION=1 swift test --filter syntheticFiveMinuteTranscript` in `Packages/Enhance`; verify summary, Sarah action item, no warnings, and <120 s. Record macOS version and date in `PROGRESS.md`.
 - [ ] P7: `make selftest`. Expect `finalize-synthetic`, `mic-probe` (after you grant Microphone), `capture-tone` all PASS. `capture-tone` with zero buffers: System Settings → Privacy & Security → Screen & System Audio Recording → System Audio Recording Only → enable Apple Recorder, relaunch via `open`, rerun.
 - [ ] `cpu-60s` < 10% of one core.
 - [ ] Discord call, App + Mic, headphones on, 5 min. Both channels mean > -50 dB (guide 33.3 step 3).

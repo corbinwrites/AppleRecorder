@@ -12,7 +12,7 @@ Statuses: pending / done / blocked / NEEDS HUMAN.
 | P3 | Theme + EditorKit logic | done | `Theme: 3 tests passed`; `EditorKit: 4 tests passed` (34 tokenizer examples and 1,000 seeded range checks) |
 | P4 | Capture software parts | done | 39 Capture tests pass normally and in 3 consecutive TSan runs; `scripts/check-realtime.sh` PASS; semaphore synchronizes stress-test consumer before assertions |
 | P5 | Transcribe package | NEEDS HUMAN | `Packages/Transcribe: 9 unit tests passed`; gated integration not run because it requires P4 Finalizer and downloads the tiny model |
-| P6 | Enhance + Pipeline packages | pending | |
+| P6 | Enhance + Pipeline packages | NEEDS HUMAN | Enhance (20 tests) and Pipeline (10 tests) pass; real Foundation Models integration is gated on Apple Intelligence (`HUMAN-TODO.md`) |
 | P7 | Hardware capture + selftests | pending | |
 | P8 | App shell | pending | |
 | P9 | Integration | pending | |

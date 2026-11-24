@@ -152,3 +152,9 @@ This document records the exact confirmed API signatures and behavior discovered
   - `.unsupportedLanguageOrLocale`
   - `.decodingFailure`
   - `.concurrentRequests`
+
+### 5.4 P6 adapter compile confirmation
+- The active FoundationModels SDK interface confirms `LanguageModelSession(model:tools:instructions:)`, `respond(to:generating:)`, and `Response.content`; `String` conforms to `PromptRepresentable`.
+- `SystemLanguageModel.tokenCount(for:)` accepts a prompt, is available from macOS 26.4, and is therefore called behind `#available(macOS 26.4, *)` with the specified character-count fallback.
+- The SDK also exposes the macOS 27 `LanguageModelError` cases for context size, refusal/guardrail, and rate limiting. The adapter maps those plus the documented macOS 26 `LanguageModelSession.GenerationError` cases.
+- `SystemLanguageModel.Availability.UnavailableReason` exposes `deviceNotEligible`, `appleIntelligenceNotEnabled`, and `modelNotReady`; the adapter's reason mapping has always-run tests. The real generation path remains gated on Apple Intelligence availability.
