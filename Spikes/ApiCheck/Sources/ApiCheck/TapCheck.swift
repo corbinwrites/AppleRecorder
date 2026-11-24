@@ -1,5 +1,11 @@
 import Foundation
 import CoreAudio
+import Darwin
+
+public func verifyTimebaseAPI() {
+    var tb = mach_timebase_info_data_t()
+    precondition(mach_timebase_info(&tb) == KERN_SUCCESS && tb.denom != 0)
+}
 
 public func verifyTapAPIs() {
     let desc = CATapDescription(monoMixdownOfProcesses: [AudioObjectID(123)])

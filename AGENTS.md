@@ -11,7 +11,7 @@ Native macOS meeting recorder. Spec: `docs/BUILD-GUIDE.md` (do NOT read it whole
 
 ## Hard rules
 - **Never edit, rename, delete, or skip a spec test.** Files under `Packages/*/Tests` and `App/UITests` at tag `spec-v1` are frozen (`scripts/protect-tests.sh`). New test files are allowed. A test that looks wrong goes in `BLOCKERS.md`. Stop.
-- **Never guess an Apple or WhisperKit API.** Run `scripts/apple-api.sh <Symbol>`, read `docs/reference/sdk/`, read `.build/checkouts/`. Record what you confirm in `docs/API-NOTES.md`. Not found: `BLOCKERS.md`. Stop.
+- **Never guess an Apple or WhisperKit API.** Run `scripts/apple-api.sh <Symbol>`, read `docs/reference/sdk/`, read `.build/checkouts/`, and check the active SDK headers/interfaces (including `$(xcrun --show-sdk-path)/usr/include`) when local references have no match. Record what you confirm in `docs/API-NOTES.md`. Only add a blocker after checking the active SDK.
 - Use the exact names, paths, and signatures in the task file. No renaming, no reorganizing, no extras.
 - Only dependency: `argmax-oss-swift` (product `WhisperKit`). No network at runtime except the model download. No telemetry.
 - Swift 6, strict concurrency. No `!` or `try!` outside tests. No `print` outside `SelfTest/` and `scripts/`; use `Logger`.

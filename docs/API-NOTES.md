@@ -85,6 +85,11 @@ This document records the exact confirmed API signatures and behavior discovered
 - `OSAllocatedUnfairLock(initialState:)` is available from `import os`; confirmed in the checked-out Argmax sources (`TTSKit.swift` and `ArgmaxCore/Logging.swift`). Capture test files using it import `os`.
 - The installed SDK has no `Thread.yield()` member; the ring-buffer stress consumer uses `Thread.sleep(forTimeInterval:)`, which is also used by the existing Capture tests.
 
+### 3.3 `mach_timebase_info` (CONFIRMED)
+- Header: `<mach/mach_time.h>` at `$(xcrun --show-sdk-path)/usr/include/mach/mach_time.h`; Swift import: `Darwin`.
+- C declaration: `struct mach_timebase_info { uint32_t numer; uint32_t denom; }`, `mach_timebase_info_data_t`, and `kern_return_t mach_timebase_info(mach_timebase_info_t info)`.
+- Conversion: nanoseconds = ticks × `numer` / `denom`. The function returns `KERN_SUCCESS`; reject a zero denominator. The active SDK header was inspected directly, and `Spikes/ApiCheck/TapCheck.swift` compiles the call.
+
 ---
 
 ## 4. Transcription / WhisperKit (§23, §26.3)

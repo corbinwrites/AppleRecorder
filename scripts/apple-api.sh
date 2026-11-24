@@ -10,6 +10,8 @@ echo "== swiftinterface (SDK)"
 for r in "${ROOTS[@]}"; do [ -d "$r" ] && find "$r" -name '*.swiftinterface' ! -name '*.private.swiftinterface' -print0 | xargs -0 grep -nE "$PAT" 2>/dev/null; done | head -50
 echo "== headers (SDK)"
 for r in "${ROOTS[@]}"; do [ -d "$r" ] && find "$r" -path '*Headers*' -name '*.h' -print0 | xargs -0 grep -nE "$PAT" 2>/dev/null; done | head -50
+echo "== SDK C headers (usr/include)"
+if [ -d "$SDK/usr/include" ]; then find "$SDK/usr/include" -type f \( -name '*.h' -o -name '*.hpp' \) -print0 | xargs -0 grep -nE "$PAT" 2>/dev/null | head -50; fi
 echo "== SwiftPM checkouts (WhisperKit etc.)"
 find . -path '*/.build/checkouts/*' -name '*.swift' -not -path '*/Tests/*' -print0 2>/dev/null | xargs -0 grep -nE "$PAT" 2>/dev/null | head -50
 echo "== saved dumps"
