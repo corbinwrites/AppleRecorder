@@ -9,6 +9,6 @@ public func makeTapIOBlock(ring: RingBuffer,
         guard let buffer = list.first, let raw = buffer.mData else { return }
         if firstHostTime.pointee == 0 { firstHostTime.pointee = inInputTime.pointee.mHostTime }
         let samples = Int(buffer.mDataByteSize) / MemoryLayout<Float>.size
-        _ = ring.write(raw.assumingMemoryBound(to: Float.self), count: samples)
+        _ = ring.write(from: raw.assumingMemoryBound(to: Float.self), count: samples)
     }
 }

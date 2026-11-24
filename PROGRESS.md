@@ -10,7 +10,7 @@ Statuses: pending / done / blocked / NEEDS HUMAN.
 | P1 | Core package | done | `Packages/Core: 31 tests passed`; `swift build -Xswiftc -warnings-as-errors` PASS |
 | P2 | Output package | done | `Packages/Output: 10 tests passed` (golden Markdown, export links, atomic writes, folder checks) |
 | P3 | Theme + EditorKit logic | done | `Theme: 3 tests passed`; `EditorKit: 4 tests passed` (34 tokenizer examples and 1,000 seeded range checks) |
-| P4 | Capture software parts | pending | |
+| P4 | Capture software parts | blocked | `swift test` currently stops at an unverified HostClock Apple API; see `BLOCKERS.md` |
 | P5 | Transcribe package | pending | |
 | P6 | Enhance + Pipeline packages | pending | |
 | P7 | Hardware capture + selftests | pending | |

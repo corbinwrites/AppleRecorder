@@ -1,6 +1,6 @@
 import Foundation
 import Core
 
-public struct CapturePlaceholder: Sendable {
-    public init() {}
+public enum Capture {
+    public static let version = "1.0.0"
 }

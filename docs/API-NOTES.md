@@ -80,6 +80,11 @@ This document records the exact confirmed API signatures and behavior discovered
   - `.store(_:ordering: .relaxed)`
   - `.wrappingAdd(_:ordering: .relaxed)`
 
+### 3.2 Capture test compilation
+- Mutating `ZeroRunDetector.feed(...)` calls are evaluated before `#expect`, because Swift Testing’s macro treats a mutating receiver as immutable inside its expression expansion. This preserves each expected result while allowing the suite to compile.
+- `OSAllocatedUnfairLock(initialState:)` is available from `import os`; confirmed in the checked-out Argmax sources (`TTSKit.swift` and `ArgmaxCore/Logging.swift`). Capture test files using it import `os`.
+- The installed SDK has no `Thread.yield()` member; the ring-buffer stress consumer uses `Thread.sleep(forTimeInterval:)`, which is also used by the existing Capture tests.
+
 ---
 
 ## 4. Transcription / WhisperKit (§23, §26.3)
