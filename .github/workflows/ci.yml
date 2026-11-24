@@ -1,0 +1,16 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # protect-tests.sh needs the spec-v1 tag
+          fetch-tags: true
+      - run: brew install xcodegen
+      - run: ./scripts/protect-tests.sh
+      - run: make test
+      - run: ./scripts/check-realtime.sh
+      - run: make build
+      - run: bash -c 'cd Packages/Capture && swift test --sanitize=thread'

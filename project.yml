@@ -1,0 +1,56 @@
+name: AppleRecorder
+options:
+  bundleIdPrefix: io.github.corbinwrites
+  deploymentTarget: { macOS: "26.0" }
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    ENABLE_HARDENED_RUNTIME: YES
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: "-"          # CI overrides with the release cert (§20.2)
+    PRODUCT_BUNDLE_IDENTIFIER: io.github.corbinwrites.AppleRecorder
+packages:
+  Core: { path: Packages/Core }
+  Capture: { path: Packages/Capture }
+  Transcribe: { path: Packages/Transcribe }
+  Enhance: { path: Packages/Enhance }
+  Output: { path: Packages/Output }
+  Theme: { path: Packages/Theme }
+  EditorKit: { path: Packages/EditorKit }
+  Pipeline: { path: Packages/Pipeline }
+targets:
+  AppleRecorder:
+    type: application
+    platform: macOS
+    sources:
+      - path: App
+        excludes:
+          - "UITests/**"
+          - "Info.plist"
+          - "AppleRecorder.entitlements"
+    dependencies:
+      - { package: Core }
+      - { package: Capture }
+      - { package: Transcribe }
+      - { package: Enhance }
+      - { package: Output }
+      - { package: Theme }
+      - { package: EditorKit }
+      - { package: Pipeline }
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: Apple Recorder
+        LSMinimumSystemVersion: "26.0"
+        NSMicrophoneUsageDescription: "Apple Recorder records your microphone so it can transcribe your meetings."
+        NSAudioCaptureUsageDescription: "Apple Recorder records audio from the app you choose so it can transcribe your meetings."
+    entitlements:
+      path: App/AppleRecorder.entitlements
+      properties:
+        com.apple.security.device.audio-input: true
+  AppleRecorderUITests:
+    type: bundle.ui-testing
+    platform: macOS
+    sources: [App/UITests]
+    dependencies: [{ target: AppleRecorder }]

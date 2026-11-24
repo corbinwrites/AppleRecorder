@@ -4,8 +4,8 @@ Statuses: pending / done / blocked / NEEDS HUMAN.
 
 | Step | What | Status | Evidence |
 |---|---|---|---|
-| P0.0 | Get the repo, first push | pending | |
-| P0.1 | Scaffold: tree, packages, project.yml, Makefile, scripts, CI | pending | |
+| P0.0 | Get the repo, first push | done | f85ba20 (legacy spike scripts, SDK API dumps) |
+| P0.1 | Scaffold: tree, packages, project.yml, Makefile, scripts, CI | done | make gen && swift build (8 pkgs) && make build PASS |
 | P0.2 | API verification spike | pending | |
 | P1 | Core package | pending | |
 | P2 | Output package | pending | |

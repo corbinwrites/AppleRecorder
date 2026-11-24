@@ -1,0 +1,44 @@
+name: release
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+jobs:
+  release:
+    runs-on: macos-26
+    environment: release
+    env:
+      APP: build/Build/Products/Release/AppleRecorder.app
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen
+      - run: make test
+      - name: Build (unsigned)
+        run: |
+          xcodegen generate
+          xcodebuild -project AppleRecorder.xcodeproj -scheme AppleRecorder -configuration Release \
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO build
+      - name: Sign with the pinned release certificate
+        env:
+          MAC_SIGN_P12: ${{ secrets.MAC_SIGN_P12 }}
+          MAC_SIGN_PASSWORD: ${{ secrets.MAC_SIGN_PASSWORD }}
+          KC_PASS: ${{ secrets.KC_PASS }}
+        run: ./scripts/sign-release.sh "$APP"
+      - run: ./scripts/verify-signing.sh "$APP"
+      - name: Package
+        run: |
+          VER="${GITHUB_REF_NAME#v}"
+          mkdir -p dist
+          ditto -c -k --keepParent "$APP" "dist/AppleRecorder-$VER.zip"
+          hdiutil create -volname "Apple Recorder" -srcfolder "$APP" -ov -format UDZO "dist/AppleRecorder-$VER.dmg"
+          (cd dist && shasum -a 256 AppleRecorder-* > SHA256SUMS.txt)
+      - uses: actions/attest-build-provenance@v3     # v4 is a wrapper over actions/attest; v3 is what GitHub's docs show
+        with:
+          subject-path: "dist/*"
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --title "Apple Recorder $GITHUB_REF_NAME" --generate-notes
