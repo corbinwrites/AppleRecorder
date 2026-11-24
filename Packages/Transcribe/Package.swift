@@ -9,6 +9,7 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../Core"),
+        .package(path: "../Capture"),
         .package(url: "https://github.com/argmaxinc/argmax-oss-swift.git", from: "1.1.0"),
     ],
     targets: [
@@ -23,6 +24,7 @@ let package = Package(
             name: "TranscribeTests",
             dependencies: [
                 "Transcribe",
+                .product(name: "Capture", package: "Capture"),
                 .product(name: "CoreTestSupport", package: "Core"),
             ]
         ),

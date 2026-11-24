@@ -110,6 +110,9 @@ This document records the exact confirmed API signatures and behavior discovered
   - `AudioInputOptions(audioLoadingMode: .incremental)`
 - Result segments:
   - `results.flatMap(\.segments)` yields `TranscriptionSegment` with `.start` (`Float`), `.end` (`Float`), `.text` (`String`).
+- `DecodingOptions(wordTimestamps:chunkingStrategy:)`, `.vad`, `WhisperKitConfig(model:)`, `WhisperKit(_:) async throws`, `WhisperKit.transcribe(audioPath:audioInputOptions:decodeOptions:callback:)`, `WhisperKit.tokenizer`, and `WhisperTokenizer.encode(text:)` were checked in the locked `argmax-oss-swift` 1.1.1 checkout under `Packages/Transcribe/.build/checkouts/`.
+- The Foundation importer exposes `AVAudioConverter`'s header method `convertToBuffer:error:withInputFromBlock:` as `convert(to:error:withInputFrom:)`; the SDK header also confirms `channelMap`, `downmix`, and converter output statuses. Channel extraction streams through this API.
+- The prose gap is resolved with `TranscribeOrchestrator(engine:)` and `transcribe(audioFile:mode:tempDirectory:vocabulary:onProgress:)`; engine failures map to `.engineFailed(stage: "transcribing")`.
 
 ---
 

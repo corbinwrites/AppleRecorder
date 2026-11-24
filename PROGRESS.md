@@ -11,7 +11,7 @@ Statuses: pending / done / blocked / NEEDS HUMAN.
 | P2 | Output package | done | `Packages/Output: 10 tests passed` (golden Markdown, export links, atomic writes, folder checks) |
 | P3 | Theme + EditorKit logic | done | `Theme: 3 tests passed`; `EditorKit: 4 tests passed` (34 tokenizer examples and 1,000 seeded range checks) |
 | P4 | Capture software parts | blocked | `swift test` currently stops at an unverified HostClock Apple API; see `BLOCKERS.md` |
-| P5 | Transcribe package | pending | |
+| P5 | Transcribe package | NEEDS HUMAN | `Packages/Transcribe: 9 unit tests passed`; gated integration not run because it requires P4 Finalizer and downloads the tiny model |
 | P6 | Enhance + Pipeline packages | pending | |
 | P7 | Hardware capture + selftests | pending | |
 | P8 | App shell | pending | |
