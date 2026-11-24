@@ -70,6 +70,7 @@ import os
             let ring = RingBuffer(capacity: 4096)
             let total = 200_000
             let done = OSAllocatedUnfairLock(initialState: false)
+            let consumerDone = DispatchSemaphore(value: 0)
             nonisolated(unsafe) var received: [Float] = []
             received.reserveCapacity(total)
 
@@ -88,6 +89,7 @@ import os
                         Thread.sleep(forTimeInterval: 0.0001)
                     }
                 }
+                consumerDone.signal()
             }
             consumer.start()
 
@@ -102,9 +104,7 @@ import os
             }
             done.withLock { $0 = true }
 
-            while !consumer.isFinished {
-                Thread.sleep(forTimeInterval: 0.001)
-            }
+            consumerDone.wait()
 
             // Assert strictly increasing
             for i in 1..<received.count {

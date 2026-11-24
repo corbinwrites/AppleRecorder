@@ -14,6 +14,11 @@ Rule: where web and spike disagree, the spike wins. Where a spike claims more th
 
 **Revision 5:** agent kit. Spec tests are frozen by git tag `spec-v1` (§21 rules 17–19, `scripts/protect-tests.sh`). Per-step task files in `docs/tasks/` are generated from this guide (`make tasks`). New step P0.3 (stubs + spec tests, compiled on a Mac). Apple API lookup helpers (`scripts/apple-api.sh`). Fixed: the `writeSilence` placeholder (§25.8), the missing `ProcessingStage` enum (§24.7), the P0.1 exit check (tests stay red until P0.3 and P1+).
 
+### Completed Milestones
+- **P0.0: Get the repo, first push** — Cloned seed repo, legacy spike scripts added, SDK API interfaces dumped.
+- **P0.1: Scaffold** — Full repo tree scaffolded with eight packages (`Core`, `Capture`, `Transcribe`, `Enhance`, `Output`, `Theme`, `EditorKit`, `Pipeline`), `project.yml`, `Makefile`, signing and realtime check scripts, and CI/release workflows.
+- **P0.2: API verification spike** — `Spikes/ApiCheck` compiled and verified with Core Audio process taps, aggregate devices, `AVAudioEngine`, AAC/PCM files, `Synchronization.Atomic`, `FoundationModels`, and `WhisperKit`. Documented in `docs/API-NOTES.md`.
+
 ---
 
 ## 1. Decisions locked
@@ -1883,6 +1888,7 @@ Tests (`RingBufferTests`):
 - `readEmptyReturnsZero`.
 - `zeroCountWriteIsNoop`.
 - `spscStress`: producer thread writes values `0..<200_000` in random chunk sizes 1…512 into capacity 4096; consumer thread reads concurrently until producer done and buffer empty. Assert: received values strictly increasing; `received.count + droppedSamples == 200_000`. Run 5 times. **Run this test under Thread Sanitizer** (`swift test --sanitize=thread`); it must be clean.
+- The stress test uses an explicit completion semaphore to synchronize the consumer's final array writes before assertions.
 
 ### 25.3 `ZeroRunDetector` (pure)
 
